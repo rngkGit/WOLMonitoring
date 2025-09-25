@@ -65,12 +65,12 @@ To get a local copy up and running, build this repository in Xcode 26.0 or great
 
 See the [open issues](https://github.com/rngkGit/WOLMonitoring/issues) for a full list of proposed features (and known issues).
 
-- [ ] **Core:** Add, Edit, and Delete Computer Profiles (it's almost done, I need to figure out how to edit the computer once its made)
+- [X] **Core:** Add, Edit, and Delete Computer Profiles
 - [ ] **Feature:** Implement Wake-On-LAN (WOL) Packet Sending
 - [ ] **Feature:** Implement ICMP Ping for Live Status Checks
 - [ ] **Feature:** Notifications
 - [ ] **Enhancement:** iCloud Sync Integration
-- [ ] **Feature:** Design & Develop Companion Agent for Sensor Reading
+- [X] **Feature:** Companion Agent for Sensor Reading (CPU Temp only right now)
 - [ ] **Feature:** API for receiving sensor data in the iOS app
 
 ## Contributing
