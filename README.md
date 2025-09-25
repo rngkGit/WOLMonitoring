@@ -1,4 +1,4 @@
-# WOLMonitoring 
+# WOLMonitoring
 
 ![Xcode Version](https://img.shields.io/badge/Xcode-26.0.1-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-iOS-lightgrey.svg)
@@ -40,7 +40,7 @@ To get a local copy up and running, build this repository in Xcode 26.0 or great
 
 ### Prerequisites
 
-* macOS 26 running the latest version of Xcode
+*  macOS 26 running the latest version of Xcode
 
 ### Installation
 
