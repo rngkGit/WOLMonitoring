@@ -10,96 +10,89 @@
 import Foundation
 import SwiftUI
 
-// A struct to hold data for a sensor.
-struct SensorData: Codable, Hashable, Identifiable {
-    let id: UUID
-    var name: String
-    var type: String // New: Added type property
-    var value: Double
-    var unit: String
+struct IPData: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var address: String = ""
+}
+
+struct MACAddressData: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var address: String = ""
     
-    // Updated initializer to support the new type property
-    init(id: UUID = UUID(), name: String = "New Sensor", type: String = "CPU Temp", value: Double = 0.0, unit: String? = nil) {
-        self.id = id
-        self.name = name
-        self.type = type
-        self.value = value
+    var isValid: Bool {
+        MACAddressData.isValidMACAddress(address)
+    }
+    
+    static func isValidMACAddress(_ mac: String) -> Bool {
+        let trimmedMac = mac.trimmingCharacters(in: .whitespaces)
+        if trimmedMac.isEmpty { return false } // Empty is not considered valid for saving.
         
-        // Default unit based on type, if not explicitly provided
-        if let explicitUnit = unit {
-            self.unit = explicitUnit
-        } else if type == "CPU Temp" {
-            self.unit = "ºC"
-        } else {
-            self.unit = "" // Default for other types if any, or you can make it required later
+        // Remove common separators (colon, hyphen, space) for validation
+        let cleanMAC = trimmedMac.replacingOccurrences(of: "[: -]", with: "", options: .regularExpression)
+        
+        // A valid MAC address must consist of exactly 12 hexadecimal characters
+        guard cleanMAC.count == 12 else {
+            return false
         }
+        
+        // Check if all characters in the cleaned string are hexadecimal digits
+        let hexCharset = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+        return cleanMAC.rangeOfCharacter(from: hexCharset.inverted) == nil
     }
 }
 
-// A struct to hold data for an IP address.
-struct IPData: Codable, Hashable, Identifiable {
-    let id: UUID
-    var address: String
-    
-    init(id: UUID = UUID(), address: String = "192.168.0.1") {
-        self.id = id
-        self.address = address
-    }
+// Since the definition for SensorData was not provided, this is a minimal
+// implementation based on its usage in other views.
+struct SensorData: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String = "CPU Temp"
+    var type: String = "CPU Temp"
+    var value: Double = 0.0
+    var unit: String = "ºC"
 }
 
-// An enum to represent different types of components a computer can have.
-enum Component: Codable, Hashable, Identifiable {
+enum Component: Identifiable, Codable, Hashable {
     case ipAddress(IPData)
     case sensor(SensorData)
-    
+    case macAddress(MACAddressData)
+
     var id: UUID {
         switch self {
-        case .ipAddress(let data):
-            return data.id
-        case .sensor(let data):
-            return data.id
-        }
-    }
-    
-    var name: String {
-        switch self {
-        case .ipAddress:
-            return "IP Address"
-        case .sensor(let data):
-            return data.name
+        case .ipAddress(let data): return data.id
+        case .sensor(let data): return data.id
+        case .macAddress(let data): return data.id
         }
     }
 }
 
-// MARK: - Binding Extensions
 extension Binding where Value == Component {
     var ipAddress: Binding<IPData>? {
-        guard case .ipAddress = wrappedValue else { return nil }
-        return Binding<IPData>(
-            get: {
-                if case .ipAddress(let data) = self.wrappedValue {
-                    return data
-                }
-                fatalError("Attempted to access ipAddress when component is not an IP address.")
-            },
-            set: { newValue in
-                self.wrappedValue = .ipAddress(newValue)
-            }
-        )
+        if case .ipAddress(let data) = self.wrappedValue {
+            return Binding<IPData>(
+                get: { data },
+                set: { self.wrappedValue = .ipAddress($0) }
+            )
+        }
+        return nil
     }
     
     var sensor: Binding<SensorData>? {
-        guard case .sensor = wrappedValue else { return nil }
-        return Binding<SensorData>(
-            get: {
-                if case .sensor(let data) = self.wrappedValue {
-                    return data
-                }
-                fatalError("Attempted to access sensor when component is not a sensor.")
-            },
-            set: { newValue in
-                self.wrappedValue = .sensor(newValue)
-            }
-        )
+        if case .sensor(let data) = self.wrappedValue {
+            return Binding<SensorData>(
+                get: { data },
+                set: { self.wrappedValue = .sensor($0) }
+            )
+        }
+        return nil
+    }
+    
+    var macAddress: Binding<MACAddressData>? {
+        if case .macAddress(let data) = self.wrappedValue {
+            return Binding<MACAddressData>(
+                get: { data },
+                set: { self.wrappedValue = .macAddress($0) }
+            )
+        }
+        return nil
     }
 }

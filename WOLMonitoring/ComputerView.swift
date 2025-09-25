@@ -23,15 +23,12 @@ struct ComputerView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(computer.name ?? "Unknown Computer")
                             .font(.headline)
-                        Text(computer.macAddress ?? "No MAC Address")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.vertical, 8)
             }
             
-            Section("Components") {
+            Section("Details") {
                 if computer.components.isEmpty {
                     Text("No components added yet.")
                         .foregroundStyle(.secondary)
@@ -45,22 +42,9 @@ struct ComputerView: View {
         .navigationTitle(computer.name ?? "Computer Details")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Edit") {
                     isPresentingEditView = true
-                }
-
-                Menu {
-                    Button("Add IP Address") {
-                        let newIP = IPData()
-                        computer.components.append(.ipAddress(newIP))
-                    }
-                    Button("Add Sensor") {
-                        let newSensor = SensorData()
-                        computer.components.append(.sensor(newSensor))
-                    }
-                } label: {
-                    Label("Add Component", systemImage: "plus")
                 }
             }
         }
@@ -80,6 +64,15 @@ fileprivate struct ComponentRowView: View {
                 Text("IP Address")
                     .font(.headline)
                 Text(ipData.address)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        case .macAddress(let macData):
+            VStack(alignment: .leading, spacing: 2) {
+                Text("MAC Address")
+                    .font(.headline)
+                Text(macData.address)
                     .font(.body)
                     .foregroundStyle(.secondary)
             }

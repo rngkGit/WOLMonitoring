@@ -14,32 +14,35 @@ struct EditComputerView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var computerName: String
-    @State private var macAddress: String
     
-    @State private var macAddressError: String? // New state for MAC address error message
-
     private var isFormValid: Bool {
-        // Form is valid if computerName is not empty, macAddress is not empty (after trimming),
-        // and there is no MAC address validation error.
-        return !computerName.trimmingCharacters(in: .whitespaces).isEmpty &&
-               !macAddress.trimmingCharacters(in: .whitespaces).isEmpty &&
-               macAddressError == nil
+        // Form is valid if computerName is not empty and all components are valid.
+        return !computerName.trimmingCharacters(in: .whitespaces).isEmpty && areAllComponentsValid()
+    }
+    
+    private func areAllComponentsValid() -> Bool {
+        for component in computer.components {
+            if case .macAddress(let macData) = component {
+                if !macData.isValid {
+                    return false
+                }
+            }
+            // Add validation for other components here if needed in the future
+        }
+        return true
+    }
+    
+    // A computed property to check if a MAC address component exists
+    private var hasMACAddressComponent: Bool {
+        computer.components.contains { component in
+            if case .macAddress = component { return true }
+            return false
+        }
     }
 
     init(computer: Binding<Computer>) {
         _computer = computer
         _computerName = State(initialValue: computer.wrappedValue.name ?? "")
-        _macAddress = State(initialValue: computer.wrappedValue.macAddress ?? "")
-
-        // Perform initial validation for MAC address
-        let initialMac = computer.wrappedValue.macAddress ?? ""
-        if initialMac.trimmingCharacters(in: .whitespaces).isEmpty {
-            _macAddressError = State(initialValue: "MAC Address cannot be empty.")
-        } else if !isValidMACAddress(initialMac) {
-            _macAddressError = State(initialValue: "Invalid MAC Address format. E.g., 00:11:22:33:44:55")
-        } else {
-            _macAddressError = State(initialValue: nil)
-        }
     }
 
     var body: some View {
@@ -47,29 +50,14 @@ struct EditComputerView: View {
             Form {
                 Section("Computer Details") {
                     TextField("Computer Name", text: $computerName)
-                    
-                    VStack(alignment: .leading) { // Wrap TextField and error message in a VStack
-                        TextField("MAC Address", text: $macAddress)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .onChange(of: macAddress) {
-                                // Validate MAC address input in real-time
-                                validateMacAddressInput(macAddress)
-                            }
-                        
-                        if let error = macAddressError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-                    }
                 }
                 
-                Section("Components") {
+                Section("Details") {
                     ForEach($computer.components) { $component in
                         ComponentEditView(component: $component)
                     }
                     .onDelete(perform: deleteComponent)
+                    .onMove(perform: moveComponent)
                 }
             }
             .navigationTitle("Edit Computer")
@@ -86,29 +74,26 @@ struct EditComputerView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Add IP Address") {
-                            // When a sensor exists without an IP, adding one will automatically
-                            // trigger the ComputerManager to start polling.
                             let newIP = IPData()
                             computer.components.append(.ipAddress(newIP))
                         }
                         Button("Add Sensor") {
-                            // Default to CPU Temp with ºC units
                             let newSensor = SensorData(type: "CPU Temp", unit: "ºC")
                             computer.components.append(.sensor(newSensor))
                         }
+                        Button("Add MAC Address") {
+                            let newMAC = MACAddressData()
+                            computer.components.append(.macAddress(newMAC))
+                        }
+                        .disabled(hasMACAddressComponent) // Disable if one already exists
                     } label: {
                         Label("Add Component", systemImage: "plus")
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        // Perform a final validation check before saving
-                        validateMacAddressInput(macAddress)
-                        
-                        // Only save if the form is valid
                         if isFormValid {
                             computer.name = computerName
-                            computer.macAddress = macAddress
                             
                             // If a CPU Temp sensor exists but no IP, add a default one.
                             let hasCPUTempSensor = computer.components.contains {
@@ -134,40 +119,14 @@ struct EditComputerView: View {
         computer.components.remove(atOffsets: offsets)
     }
     
-    // MARK: - MAC Address Validation
-    
-    /// Validates the given MAC address input and updates the `macAddressError` state.
-    private func validateMacAddressInput(_ input: String) {
-        let trimmedInput = input.trimmingCharacters(in: .whitespaces)
-        
-        if trimmedInput.isEmpty {
-            macAddressError = "MAC Address cannot be empty."
-        } else if !isValidMACAddress(trimmedInput) {
-            macAddressError = "Invalid MAC Address format. E.g., 00:11:22:33:44:55"
-        } else {
-            macAddressError = nil // MAC address is valid
-        }
-    }
-    
-    /// Checks if a given string represents a valid MAC address format.
-    /// It allows for common separators like colons, hyphens, and spaces, or no separators.
-    private func isValidMACAddress(_ mac: String) -> Bool {
-        // Remove common separators (colon, hyphen, space) for validation
-        let cleanMAC = mac.replacingOccurrences(of: "[: -]", with: "", options: .regularExpression)
-        
-        // A valid MAC address must consist of exactly 12 hexadecimal characters
-        guard cleanMAC.count == 12 else {
-            return false
-        }
-        
-        // Check if all characters in the cleaned string are hexadecimal digits
-        let hexCharset = CharacterSet(charactersIn: "01256789abcdefABCDEF")
-        return cleanMAC.rangeOfCharacter(from: hexCharset.inverted) == nil
+    private func moveComponent(from source: IndexSet, to destination: Int) {
+        computer.components.move(fromOffsets: source, toOffset: destination)
     }
 }
 
 fileprivate struct ComponentEditView: View {
     @Binding var component: Component
+    @State private var macAddressError: String?
     
     var body: some View {
         // Switch on the wrappedValue of the binding, then use the new sub-bindings.
@@ -183,29 +142,50 @@ fileprivate struct ComponentEditView: View {
                         .textInputAutocapitalization(.never)
                 }
             }
+            
+        case .macAddress:
+            if let macDataBinding = $component.macAddress {
+                VStack(alignment: .leading) {
+                    Text("MAC Address")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("Address", text: macDataBinding.address)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onChange(of: macDataBinding.wrappedValue.address) {
+                            validateMacAddressInput(macDataBinding.wrappedValue.address)
+                        }
+                    
+                    if let error = macAddressError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                .onAppear {
+                    // Perform initial validation.
+                    validateMacAddressInput(macDataBinding.wrappedValue.address)
+                }
+            }
+            
         case .sensor:
             if let sensorDataBinding = $component.sensor {
                 VStack(alignment: .leading) {
                     Text("Sensor")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("Sensor Name", text: sensorDataBinding.name)
 
-                    // New: Picker for sensor type
                     Picker("Sensor Type", selection: sensorDataBinding.type) {
                         Text("CPU Temp").tag("CPU Temp")
-                        // Add other sensor types here as they are introduced
                     }
-                    .pickerStyle(.segmented) // Or .menu
-                    .onChange(of: sensorDataBinding.type.wrappedValue) { newType in
-                        // When type changes, update unit if it's "CPU Temp"
-                        if newType == "CPU Temp" {
+                    .onChange(of: sensorDataBinding.type.wrappedValue) {
+                        sensorDataBinding.name.wrappedValue = sensorDataBinding.type.wrappedValue
+                        if sensorDataBinding.type.wrappedValue == "CPU Temp" {
                             sensorDataBinding.unit.wrappedValue = "ºC"
                         }
                     }
 
                     HStack {
-                        // Display the polled value, but don't allow direct editing for CPU Temp
                         Text(sensorDataBinding.wrappedValue.type == "CPU Temp" ? "\(String(format: "%.1f", sensorDataBinding.wrappedValue.value))" : "")
                             .frame(maxWidth: .infinity, alignment: .leading)
                         
@@ -219,11 +199,23 @@ fileprivate struct ComponentEditView: View {
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                             .frame(width: 50)
-                            // New: Disable unit editing for CPU Temp as it's fixed
                             .disabled(sensorDataBinding.type.wrappedValue == "CPU Temp")
                     }
                 }
             }
+        }
+    }
+    
+    /// Validates the given MAC address input and updates the `macAddressError` state.
+    private func validateMacAddressInput(_ input: String) {
+        let trimmedInput = input.trimmingCharacters(in: .whitespaces)
+        
+        if trimmedInput.isEmpty {
+            macAddressError = "MAC Address cannot be empty."
+        } else if !MACAddressData.isValidMACAddress(trimmedInput) {
+            macAddressError = "Invalid MAC Address format. E.g., 00:11:22:33:44:55"
+        } else {
+            macAddressError = nil // MAC address is valid
         }
     }
 }

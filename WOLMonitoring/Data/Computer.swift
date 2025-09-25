@@ -10,6 +10,14 @@ import Foundation
 struct Computer: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String?
-    var macAddress: String?
     var components: [Component] = []
+
+    var macAddress: String? {
+        for component in components {
+            if case .macAddress(let macData) = component, !macData.address.isEmpty {
+                return macData.address
+            }
+        }
+        return nil
+    }
 }

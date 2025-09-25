@@ -15,7 +15,7 @@ struct SensorDetailView: View {
     var body: some View {
         List {
             Section("Sensor Details") {
-                LabeledContent("Name", value: sensor.name)
+                LabeledContent("Sensor Name", value: sensor.name)
                 LabeledContent {
                     Text("\(String(format: "%.1f", sensor.value)) \(sensor.unit)")
                 } label: {

@@ -14,52 +14,16 @@ struct AddComputerView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var name: String = ""
-    @State private var macAddress: String = ""
-    @State private var macAddressError: String? // State for MAC address error message
-    @State private var macAddressFieldTouched: Bool = false // New state to track if MAC address field has been interacted with
     
     private var isFormValid: Bool {
-        // Form is valid if name is not empty, macAddress is not empty (after trimming),
-        // and there is no MAC address validation error.
-        return !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-               !macAddress.trimmingCharacters(in: .whitespaces).isEmpty &&
-               macAddressError == nil
+        // Form is valid if name is not empty.
+        return !name.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Computer Name", text: $name)
-                
-                VStack(alignment: .leading) {
-                    TextField("MAC Address", text: $macAddress)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .onChange(of: macAddress) {
-                            // Mark field as touched once typing begins, or if it was already touched
-                            if !macAddressFieldTouched && !macAddress.isEmpty {
-                                macAddressFieldTouched = true
-                            }
-                            // Validate MAC address input in real-time
-                            validateMacAddressInput(macAddress)
-                        }
-                    
-                    if let error = macAddressError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                }
-            }
-            .onAppear {
-                // Perform initial validation. If MAC address is empty, don't show the "cannot be empty"
-                // error initially, until the user interacts with it.
-                // Other format errors for non-empty initial values should still show.
-                if !macAddress.isEmpty {
-                    validateMacAddressInput(macAddress)
-                } else {
-                    macAddressError = nil // Ensure no error on empty initial state
-                }
             }
             .navigationTitle("New Computer")
             .navigationBarTitleDisplayMode(.inline)
@@ -71,16 +35,9 @@ struct AddComputerView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        // Ensure field is marked as touched for final validation if user didn't type anything
-                        if !macAddressFieldTouched && macAddress.isEmpty {
-                            macAddressFieldTouched = true
-                        }
-                        // Perform a final validation check before saving
-                        validateMacAddressInput(macAddress)
-                        
                         // Only save if the form is valid
                         if isFormValid {
-                            let newComputer = Computer(name: name, macAddress: macAddress)
+                            let newComputer = Computer(name: name, components: [])
                             computerManager.addComputer(newComputer)
                             dismiss()
                         }
@@ -89,41 +46,5 @@ struct AddComputerView: View {
                 }
             }
         }
-    }
-    
-    // MARK: - MAC Address Validation
-    
-    /// Validates the given MAC address input and updates the `macAddressError` state.
-    private func validateMacAddressInput(_ input: String) {
-        let trimmedInput = input.trimmingCharacters(in: .whitespaces)
-        
-        if trimmedInput.isEmpty {
-            // Only show "cannot be empty" error if the field has been touched
-            if macAddressFieldTouched {
-                macAddressError = "MAC Address cannot be empty."
-            } else {
-                macAddressError = nil // Keep no error if not touched yet
-            }
-        } else if !isValidMACAddress(trimmedInput) {
-            macAddressError = "Invalid MAC Address format. E.g., 00:11:22:33:44:55"
-        } else {
-            macAddressError = nil // MAC address is valid
-        }
-    }
-    
-    /// Checks if a given string represents a valid MAC address format.
-    /// It allows for common separators like colons, hyphens, and spaces, or no separators.
-    private func isValidMACAddress(_ mac: String) -> Bool {
-        // Remove common separators (colon, hyphen, space) for validation
-        let cleanMAC = mac.replacingOccurrences(of: "[: -]", with: "", options: .regularExpression)
-        
-        // A valid MAC address must consist of exactly 12 hexadecimal characters
-        guard cleanMAC.count == 12 else {
-            return false
-        }
-        
-        // Check if all characters in the cleaned string are hexadecimal digits
-        let hexCharset = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
-        return cleanMAC.rangeOfCharacter(from: hexCharset.inverted) == nil
     }
 }
