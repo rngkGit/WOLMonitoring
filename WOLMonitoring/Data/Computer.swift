@@ -1,5 +1,5 @@
 //
-//  ComputerList.swift
+//  Computer.swift
 //  WOLMonitoring
 //
 //  Created by Keith Beavers on 9/24/25.
@@ -7,8 +7,8 @@
 
 import Foundation
 
-struct ComputerList: Identifiable {
+struct Computer: Identifiable, Hashable, Codable {
     let id: UUID = UUID()
-    var computerName: String?
+    var name: String?
     var macAddress: String?
 }
