@@ -7,8 +7,9 @@
 
 import Foundation
 
-struct Computer: Identifiable, Hashable, Codable {
-    let id: UUID = UUID()
+struct Computer: Identifiable, Codable, Hashable {
+    var id = UUID()
     var name: String?
     var macAddress: String?
+    var components: [Component] = []
 }

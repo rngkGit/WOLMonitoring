@@ -48,9 +48,16 @@ struct ContentView: View {
                 .controlSize(.large)
                 .padding([.horizontal, .bottom])
             }
-            .navigationTitle("Home")
+            .navigationTitle("Computers")
             .navigationDestination(for: Computer.self) { computer in
-                ComputerView(computer: computer)
+                // Find the computer in the manager to create a binding for editing.
+                if let index = computerManager.computers.firstIndex(where: { $0.id == computer.id }) {
+                    ComputerView(computer: $computerManager.computers[index])
+                } else {
+                    // Fallback for a computer that might have been deleted
+                    // while the detail view is pushed.
+                    Text("Computer not found")
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

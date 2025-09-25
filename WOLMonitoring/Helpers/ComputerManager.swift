@@ -8,11 +8,15 @@
 import SwiftUI
 internal import Combine
 
+@MainActor
 class ComputerManager: ObservableObject {
     @Published var computers: [Computer] = []
-    private var cancellable: AnyCancellable?
+    
+    private var saveCancellable: AnyCancellable?
+    private var pollingCancellable: AnyCancellable?
     
     private let computersFileURL: URL
+    private let sensorPollingService = SensorPollingService()
     
     init() {
         // Get the URL for the documents directory.
@@ -22,12 +26,25 @@ class ComputerManager: ObservableObject {
         // Load computers on initialization.
         self.getComputers()
         
-        // Automatically save computers when the array changes.
-        cancellable = $computers
-            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main) // Debounce to avoid excessive writes
-            .sink { [weak self] _ in
+        // This subscription handles saving data and telling the polling service
+        // to update its tasks whenever the computers array changes.
+        saveCancellable = $computers
+            .debounce(for: .seconds(0.5), scheduler: DispatchQueue.main)
+            .sink { [weak self] computers in
                 self?.saveComputers()
+                self?.sensorPollingService.updatePolling(for: computers)
             }
+        
+        // This subscription listens for updates from the polling service
+        // and applies them to our local computer data.
+        pollingCancellable = sensorPollingService.sensorUpdatePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] update in
+                self?.applySensorUpdate(update)
+            }
+        
+        // Initial call to set up polling for existing computers.
+        sensorPollingService.updatePolling(for: computers)
     }
     
     func addComputer(_ computer: Computer) {
@@ -40,6 +57,19 @@ class ComputerManager: ObservableObject {
     
     func getComputers() {
         computers = loadComputersFromFile()
+    }
+    
+    /// Applies a sensor data update received from the polling service to the @Published computers array.
+    private func applySensorUpdate(_ update: SensorUpdate) {
+        guard let computerIndex = computers.firstIndex(where: { $0.id == update.computerId }),
+              let componentIndex = computers[computerIndex].components.firstIndex(where: { $0.id == update.sensorId }) else {
+            return
+        }
+        
+        if case .sensor(var sensorData) = computers[computerIndex].components[componentIndex] {
+            sensorData.value = update.value
+            computers[computerIndex].components[componentIndex] = .sensor(sensorData)
+        }
     }
     
     private func loadComputersFromFile() -> [Computer] {
