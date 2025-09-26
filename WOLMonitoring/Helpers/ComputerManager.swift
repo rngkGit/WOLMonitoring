@@ -14,9 +14,11 @@ class ComputerManager: ObservableObject {
     
     private var saveCancellable: AnyCancellable?
     private var pollingCancellable: AnyCancellable?
+    private var pingTimerCancellable: AnyCancellable?
     
     private let computersFileURL: URL
     private let sensorPollingService = SensorPollingService()
+    private let pingingService = PingingService()
     
     init() {
         // Get the URL for the documents directory.
@@ -45,10 +47,14 @@ class ComputerManager: ObservableObject {
         
         // Initial call to set up polling for existing computers.
         sensorPollingService.updatePolling(for: computers)
+
+        // Start pinging computers.
+        startPinging()
     }
     
     func addComputer(_ computer: Computer) {
         self.computers.append(computer)
+        refreshComputerStatus(withId: computer.id) // Ping new computer immediately.
     }
     
     func removeComputer(atOffsets offsets: IndexSet) {
@@ -57,6 +63,64 @@ class ComputerManager: ObservableObject {
     
     func getComputers() {
         computers = loadComputersFromFile()
+    }
+    
+    // MARK: - Pinging
+    
+    /// Pings all computers that have an IP address and updates their online status.
+    func refreshAllComputersStatus() {
+        Task {
+            await withTaskGroup(of: (UUID, OnlineStatus).self) { group in
+                for computer in computers {
+                    if let ipAddress = computer.ipAddress {
+                        group.addTask {
+                            let status = await self.pingingService.ping(address: ipAddress)
+                            return (computer.id, status)
+                        }
+                    }
+                }
+                
+                for await (id, status) in group {
+                    if let index = self.computers.firstIndex(where: { $0.id == id }) {
+                        self.computers[index].onlineStatus = status
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Pings a single computer by its ID.
+    func refreshComputerStatus(withId id: UUID) {
+        guard let index = computers.firstIndex(where: { $0.id == id }),
+              let ipAddress = computers[index].ipAddress else {
+            return
+        }
+        
+        Task {
+            let status = await pingingService.ping(address: ipAddress)
+            if let computerIndex = self.computers.firstIndex(where: { $0.id == id }) {
+                self.computers[computerIndex].onlineStatus = status
+            }
+        }
+    }
+    
+    private func startPinging() {
+        stopPinging() // Ensure no previous timer is running
+        
+        // Ping once on startup
+        refreshAllComputersStatus()
+        
+        // Schedule repeating pings every 10 seconds.
+        pingTimerCancellable = Timer.publish(every: 10.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refreshAllComputersStatus()
+            }
+    }
+    
+    private func stopPinging() {
+        pingTimerCancellable?.cancel()
+        pingTimerCancellable = nil
     }
     
     /// Applies a sensor data update received from the polling service to the @Published computers array.

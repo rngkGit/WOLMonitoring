@@ -9,5 +9,5 @@ import Foundation
 internal import Combine
 
 class SharedData: ObservableObject {
-    @Published var selectedComputer: Computer = Computer()
+    @Published var selectedComputer: Computer?
 }

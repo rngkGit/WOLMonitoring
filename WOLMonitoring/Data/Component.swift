@@ -13,6 +13,30 @@ import SwiftUI
 struct IPData: Identifiable, Codable, Hashable {
     var id = UUID()
     var address: String = ""
+    
+    var isValid: Bool {
+        IPData.isValidIPAddress(address)
+    }
+    
+    static func isValidIPAddress(_ ip: String) -> Bool {
+        let trimmedIP = ip.trimmingCharacters(in: .whitespaces)
+        if trimmedIP.isEmpty { return false } // Empty is not considered valid for saving.
+        
+        // An IP address must have 4 parts separated by dots.
+        let parts = trimmedIP.split(separator: ".")
+        guard parts.count == 4 else { return false }
+        
+        // Each part must be a number between 0 and 255.
+        for part in parts {
+            if let number = Int(part), number >= 0 && number <= 255 {
+                continue
+            } else {
+                return false
+            }
+        }
+        
+        return true
+    }
 }
 
 struct MACAddressData: Identifiable, Codable, Hashable {

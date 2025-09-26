@@ -22,12 +22,15 @@ struct EditComputerView: View {
     
     private func areAllComponentsValid() -> Bool {
         for component in computer.components {
-            if case .macAddress(let macData) = component {
-                if !macData.isValid {
-                    return false
-                }
+            switch component {
+            case .macAddress(let macData):
+                if !macData.isValid { return false }
+            case .ipAddress(let ipData):
+                if !ipData.isValid { return false }
+            case .sensor:
+                // No validation needed for sensor data currently.
+                continue
             }
-            // Add validation for other components here if needed in the future
         }
         return true
     }
@@ -127,6 +130,7 @@ struct EditComputerView: View {
 fileprivate struct ComponentEditView: View {
     @Binding var component: Component
     @State private var macAddressError: String?
+    @State private var ipAddressError: String?
     
     var body: some View {
         // Switch on the wrappedValue of the binding, then use the new sub-bindings.
@@ -140,6 +144,20 @@ fileprivate struct ComponentEditView: View {
                     TextField("Address", text: ipDataBinding.address)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
+                        .keyboardType(.decimalPad)
+                        .onChange(of: ipDataBinding.wrappedValue.address) {
+                            validateIPAddressInput(ipDataBinding.wrappedValue.address)
+                        }
+                    
+                    if let error = ipAddressError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                .onAppear {
+                    // Perform initial validation.
+                    validateIPAddressInput(ipDataBinding.wrappedValue.address)
                 }
             }
             
@@ -216,6 +234,19 @@ fileprivate struct ComponentEditView: View {
             macAddressError = "Invalid MAC Address format. E.g., 00:11:22:33:44:55"
         } else {
             macAddressError = nil // MAC address is valid
+        }
+    }
+    
+    /// Validates the given IP address input and updates the `ipAddressError` state.
+    private func validateIPAddressInput(_ input: String) {
+        let trimmedInput = input.trimmingCharacters(in: .whitespaces)
+        
+        if trimmedInput.isEmpty {
+            ipAddressError = "IP Address cannot be empty."
+        } else if !IPData.isValidIPAddress(trimmedInput) {
+            ipAddressError = "Invalid IP Address format. E.g., 192.168.1.1"
+        } else {
+            ipAddressError = nil // IP address is valid
         }
     }
 }
