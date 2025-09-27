@@ -11,6 +11,13 @@ struct ContentView: View {
     @StateObject private var computerManager = ComputerManager()
     @State private var isShowingAddComputerView = false
     
+    // Environment value to check if the list is in editing mode
+    @Environment(\.editMode) var editMode
+    
+    // State to manage delete confirmation
+    @State private var showingDeleteConfirmation = false
+    @State private var deleteOffsets: IndexSet?
+    
     var body: some View {
         NavigationStack {
             VStack {
@@ -35,19 +42,17 @@ struct ContentView: View {
                             .padding(.vertical, 8)
                         }
                     }
-                    .onDelete(perform: deleteComputer)
+                    // onDelete is now automatically conditional based on editMode
+                    // SwiftUI's List will only allow swipe-to-delete when editMode is active and EditButton is present.
+                    .onDelete { offsets in
+                        deleteOffsets = offsets
+                        showingDeleteConfirmation = true
+                    }
+                    .onMove(perform: computerManager.moveComputers) // Re-added onMove for reordering
                 }
-                
-                Button {
-                    isShowingAddComputerView = true
-                } label: {
-                    Label("Add Computer", systemImage: "plus")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
+                .refreshable { // Pull-to-refresh for all computers' status
+                    await computerManager.refreshAllComputersStatus()
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding([.horizontal, .bottom])
             }
             .navigationTitle("Computers")
             .navigationDestination(for: Computer.self) { computer in
@@ -61,25 +66,35 @@ struct ContentView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        computerManager.refreshAllComputersStatus()
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    EditButton() // Re-added EditButton to control editing mode
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
+                    Button {
+                        isShowingAddComputerView = true
+                    } label: {
+                        Label("Add Computer", systemImage: "plus")
+                    }
                 }
             }
             .sheet(isPresented: $isShowingAddComputerView) {
                 AddComputerView(computerManager: computerManager)
             }
+            // Confirmation alert for deletion
+            .alert("Delete Computer?", isPresented: $showingDeleteConfirmation) {
+                Button("Delete", role: .destructive) {
+                    if let offsets = deleteOffsets {
+                        computerManager.removeComputer(atOffsets: offsets)
+                    }
+                    deleteOffsets = nil // Clear the stored offsets
+                }
+                Button("Cancel", role: .cancel) {
+                    deleteOffsets = nil // Clear the stored offsets
+                }
+            } message: {
+                Text("Are you sure you want to delete the selected computer? This action cannot be undone.")
+            }
         }
-    }
-    
-    private func deleteComputer(at offsets: IndexSet) {
-        computerManager.removeComputer(atOffsets: offsets)
     }
     
     private func statusText(for computer: Computer) -> String {
@@ -110,7 +125,7 @@ struct ContentView: View {
         case .offline:
             return .red
         case .warning:
-            return .yellow
+            return .orange
         case .unknown:
             return .orange
         }

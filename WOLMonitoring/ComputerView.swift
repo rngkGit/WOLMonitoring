@@ -11,64 +11,98 @@ struct ComputerView: View {
     @Binding var computer: Computer
     var computerManager: ComputerManager
     @State private var isPresentingEditView = false
+    @State private var isShowingAddComponentSheet = false // New state for adding components
     
     var body: some View {
-        List {
-            Section("Summary") {
-                HStack(spacing: 16) {
-                    Image(systemName: "desktopcomputer")
-                        .font(.largeTitle)
-                        .imageScale(.large)
-                        .frame(width: 60)
-                        .foregroundStyle(statusColor) // This will now correctly show orange for warning
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(computer.name ?? "Unknown Computer")
-                            .font(.headline)
-                        Text(statusText)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-            
-            Section("Details") {
-                if computer.components.isEmpty {
-                    VStack(spacing: 12) {
-                        Text("No components added yet.")
-                            .foregroundStyle(.secondary)
-                        Button("Add Component") {
-                            isPresentingEditView = true
+        // Removed the VStack around the List and the Add Component button
+        VStack {
+            List {
+                Section("Summary") {
+                    HStack(spacing: 16) {
+                        Image(systemName: "desktopcomputer")
+                            .font(.largeTitle)
+                            .imageScale(.large)
+                            .frame(width: 60)
+                            .foregroundStyle(statusColor) // This will now correctly show orange for warning
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(computer.name ?? "Unknown Computer")
+                                .font(.headline)
+                            Text(statusText)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical)
-                } else {
-                    ForEach($computer.components) { $component in
-                        ComponentRowView(component: $component)
+                    .padding(.vertical, 8)
+                }
+                
+                // MARK: - New Wake on LAN Section
+                if let macAddress = computer.macAddress {
+                    Section("Actions") {
+                        Button {
+                            Task {
+                                await computerManager.wakeOnLAN(macAddress: macAddress)
+                            }
+                        } label: {
+                            Label("Wake Up Computer", systemImage: "power.dotted")
+                        }
                     }
                 }
+                
+                Section("Details") {
+                    // Always show components if they exist, otherwise a placeholder
+                    if computer.components.isEmpty {
+                        VStack { // Use a VStack to hold the text and the new button
+                            Text("No components added yet.")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical)
+                            
+                            Button("Add Component") { // New button to add components
+                                isShowingAddComponentSheet = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .padding(.bottom)
+                        }
+                    } else {
+                        ForEach($computer.components) { $component in
+                            ComponentRowView(component: $component) { componentID in
+                                // This closure is called when a component requests deletion
+                                computer.components.removeAll(where: { $0.id == componentID })
+                            }
+                        }
+                    }
+                }
+            }
+            .refreshable { // Added pull-to-refresh for this computer's status
+                // Reverted to withId: as requested
+                await computerManager.refreshComputerStatus(withId: computer.id)
             }
         }
         .navigationTitle(computer.name ?? "Computer Details")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    computerManager.refreshComputerStatus(withId: computer.id)
-                } label: {
-                    Label("Refresh Status", systemImage: "arrow.clockwise")
+                Button("Edit") {
+                    isPresentingEditView = true
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Edit") {
-                    isPresentingEditView = true
+                Button {
+                    isShowingAddComponentSheet = true
+                } label: {
+                    Label("Add Component", systemImage: "plus") // Using plus.circle.fill for better visibility
                 }
             }
         }
         .sheet(isPresented: $isPresentingEditView) {
             EditComputerView(computer: $computer)
+        }
+        .sheet(isPresented: $isShowingAddComponentSheet) {
+            // New sheet for adding components, now passing existing components
+            AddComponentScreenView(existingComponents: computer.components) { newComponent in
+                computer.components.append(newComponent)
+            }
         }
     }
     
@@ -109,6 +143,7 @@ struct ComputerView: View {
 
 fileprivate struct ComponentRowView: View {
     @Binding var component: Component
+    var onDeleteComponent: (Component.ID) -> Void // Closure to propagate component deletion
     
     var body: some View {
         switch component {
@@ -133,11 +168,14 @@ fileprivate struct ComponentRowView: View {
         case .sensor:
             // Use the binding extension to safely get a binding to the sensor data
             if let sensorBinding = $component.sensor {
-                NavigationLink(destination: SensorDetailView(sensor: sensorBinding)) {
+                NavigationLink(destination: SensorDetailView(sensor: sensorBinding, onDelete: { sensorID in
+                    // When SensorDetailView requests deletion, pass it up to ComputerView
+                    onDeleteComponent(sensorID)
+                })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(sensorBinding.wrappedValue.name)
                             .font(.headline)
-                        Text("\(String(format: "%.1f", sensorBinding.wrappedValue.value)) \(sensorBinding.wrappedValue.unit)")
+                        Text(sensorBinding.wrappedValue.displayString)
                             .font(.body)
                             .foregroundStyle(.secondary)
                     }

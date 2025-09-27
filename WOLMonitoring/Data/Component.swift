@@ -65,14 +65,32 @@ struct MACAddressData: Identifiable, Codable, Hashable {
     }
 }
 
-// Since the definition for SensorData was not provided, this is a minimal
-// implementation based on its usage in other views.
 struct SensorData: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String = "CPU Temp"
     var type: String = "CPU Temp"
-    var value: Double = 0.0
-    var unit: String = "ºC"
+    var value: Double = 0.0 // Stored internally as Celsius
+    var unit: String = "ºC" // Preferred display unit
+
+    // Helper static functions for conversion
+    static func celsiusToFahrenheit(_ celsius: Double) -> Double {
+        return (celsius * 9 / 5) + 32
+    }
+
+    static func fahrenheitToCelsius(_ fahrenheit: Double) -> Double {
+        return (fahrenheit - 32) * 5 / 9
+    }
+    
+    // NEW: Computed property for the display string, handles conversion
+    var displayString: String {
+        let displayValue: Double
+        if unit == "ºF" {
+            displayValue = SensorData.celsiusToFahrenheit(value)
+        } else {
+            displayValue = value
+        }
+        return "\(String(format: "%.1f", displayValue)) \(unit)"
+    }
 }
 
 enum Component: Identifiable, Codable, Hashable {

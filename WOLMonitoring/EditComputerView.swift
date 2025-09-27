@@ -57,7 +57,8 @@ struct EditComputerView: View {
                 
                 Section("Details") {
                     ForEach($computer.components) { $component in
-                        ComponentEditView(component: $component)
+                        // Pass the formatMACAddress function to ComponentEditView
+                        ComponentEditView(component: $component, formatMACAddress: formatMACAddress)
                     }
                     .onDelete(perform: deleteComponent)
                     .onMove(perform: moveComponent)
@@ -74,25 +75,7 @@ struct EditComputerView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     EditButton()
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Add IP Address") {
-                            let newIP = IPData()
-                            computer.components.append(.ipAddress(newIP))
-                        }
-                        Button("Add Sensor") {
-                            let newSensor = SensorData(type: "CPU Temp", unit: "ºC")
-                            computer.components.append(.sensor(newSensor))
-                        }
-                        Button("Add MAC Address") {
-                            let newMAC = MACAddressData()
-                            computer.components.append(.macAddress(newMAC))
-                        }
-                        .disabled(hasMACAddressComponent) // Disable if one already exists
-                    } label: {
-                        Label("Add Component", systemImage: "plus")
-                    }
-                }
+                // Removed the "plus" button and menu for adding components
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         if isFormValid {
@@ -125,10 +108,33 @@ struct EditComputerView: View {
     private func moveComponent(from source: IndexSet, to destination: Int) {
         computer.components.move(fromOffsets: source, toOffset: destination)
     }
+
+    /// Formats a MAC address string (with or without separators) into the XX:XX:XX:XX:XX:XX format.
+    /// Returns the original string if it cannot be formatted.
+    private func formatMACAddress(_ mac: String) -> String {
+        let cleanMAC = mac.replacingOccurrences(of: "[: -]", with: "", options: .regularExpression)
+        
+        guard cleanMAC.count == 12 else {
+            return mac // Return original if not 12 hex chars after cleaning
+        }
+        
+        var formatted = ""
+        for i in 0..<6 {
+            let startIndex = cleanMAC.index(cleanMAC.startIndex, offsetBy: i * 2)
+            let endIndex = cleanMAC.index(startIndex, offsetBy: 2)
+            formatted += cleanMAC[startIndex..<endIndex]
+            if i < 5 {
+                formatted += ":"
+            }
+        }
+        return formatted
+    }
 }
 
 fileprivate struct ComponentEditView: View {
     @Binding var component: Component
+    var formatMACAddress: (String) -> String // Closure to inject the formatting function
+    
     @State private var macAddressError: String?
     @State private var ipAddressError: String?
     
@@ -163,15 +169,27 @@ fileprivate struct ComponentEditView: View {
             
         case .macAddress:
             if let macDataBinding = $component.macAddress {
+                
+                // Custom binding to format MAC address on input change
+                let formattedMacAddressBinding = Binding<String>(
+                    get: { macDataBinding.wrappedValue.address },
+                    set: { newValue in
+                        // Apply formatting before setting the value
+                        macDataBinding.wrappedValue.address = formatMACAddress(newValue)
+                        // Trigger validation after formatting
+                        validateMacAddressInput(macDataBinding.wrappedValue.address)
+                    }
+                )
+
                 VStack(alignment: .leading) {
                     Text("MAC Address")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("Address", text: macDataBinding.address)
+                    TextField("Address", text: formattedMacAddressBinding) // Use the custom binding
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                        .onChange(of: macDataBinding.wrappedValue.address) {
-                            validateMacAddressInput(macDataBinding.wrappedValue.address)
+                        .onChange(of: formattedMacAddressBinding.wrappedValue) {
+                            // Validation is now handled in the custom binding's setter
                         }
                     
                     if let error = macAddressError {
@@ -181,43 +199,80 @@ fileprivate struct ComponentEditView: View {
                     }
                 }
                 .onAppear {
-                    // Perform initial validation.
+                    // Perform initial validation on the existing value
                     validateMacAddressInput(macDataBinding.wrappedValue.address)
                 }
             }
             
         case .sensor:
             if let sensorDataBinding = $component.sensor {
+                
+                // Proxy binding for value to handle C/F conversion for display/input
+                // This binding is no longer used for a TextField, but if a Text is needed
+                // to display the value (non-editable), this can still be useful.
+                let _ = Binding<Double>(
+                    get: {
+                        if sensorDataBinding.wrappedValue.unit == "ºF" {
+                            return SensorData.celsiusToFahrenheit(sensorDataBinding.wrappedValue.value)
+                        } else {
+                            return sensorDataBinding.wrappedValue.value
+                        }
+                    },
+                    set: { newValue in
+                        if var currentSensorData = sensorDataBinding.wrappedValue as? SensorData {
+                            if currentSensorData.unit == "ºF" {
+                                currentSensorData.value = SensorData.fahrenheitToCelsius(newValue)
+                            } else {
+                                currentSensorData.value = newValue
+                            }
+                            sensorDataBinding.wrappedValue = currentSensorData // Update the binding
+                        }
+                    }
+                )
+                
                 VStack(alignment: .leading) {
                     Text("Sensor")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
+                    // LabeledContent for Sensor Name, with TextAlignment to trailing
+                    LabeledContent {
+                        TextField("Name", text: sensorDataBinding.name)
+                            .multilineTextAlignment(.trailing) // Ensures text is on the right
+                    } label: {
+                        Text("Sensor Name")
+                    }
+                    
+                    // Picker for Sensor Type
                     Picker("Sensor Type", selection: sensorDataBinding.type) {
                         Text("CPU Temp").tag("CPU Temp")
+                        // Add other sensor types here if needed
                     }
-                    .onChange(of: sensorDataBinding.type.wrappedValue) {
-                        sensorDataBinding.name.wrappedValue = sensorDataBinding.type.wrappedValue
-                        if sensorDataBinding.type.wrappedValue == "CPU Temp" {
-                            sensorDataBinding.unit.wrappedValue = "ºC"
+                    .onChange(of: sensorDataBinding.type.wrappedValue) { oldValue, newValue in
+                        // Name is now editable, so only suggest type if name is empty or matches old type
+                        if sensorDataBinding.name.wrappedValue.isEmpty || sensorDataBinding.name.wrappedValue == oldValue {
+                            sensorDataBinding.name.wrappedValue = newValue
                         }
                     }
-
-                    HStack {
-                        Text(sensorDataBinding.wrappedValue.type == "CPU Temp" ? "\(String(format: "%.1f", sensorDataBinding.wrappedValue.value))" : "")
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Removed LabeledContent for "Value" as requested
                         
-                        if sensorDataBinding.wrappedValue.type != "CPU Temp" {
-                            TextField("Value", value: sensorDataBinding.value, format: .number)
-                                .keyboardType(.decimalPad)
+                    // LabeledContent for Unit
+                    LabeledContent {
+                        if sensorDataBinding.wrappedValue.type == "CPU Temp" {
+                            Picker("", selection: sensorDataBinding.unit) { // Empty label as LabeledContent provides it
+                                Text("Celsius (ºC)").tag("ºC")
+                                Text("Fahrenheit (ºF)").tag("ºF")
+                            }
+                            .pickerStyle(.menu)
+                        } else {
+                            TextField("", text: sensorDataBinding.unit) // Empty label
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                                .frame(width: 50) // Keep frame for custom unit field
                         }
-                        
-                        Divider()
-                        TextField("Unit", text: sensorDataBinding.unit)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .frame(width: 50)
-                            .disabled(sensorDataBinding.type.wrappedValue == "CPU Temp")
+                    } label: {
+                        Text("Unit")
                     }
                 }
             }
