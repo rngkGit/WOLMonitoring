@@ -6,6 +6,8 @@
 
 A native iOS application for managing and monitoring your computers and servers connected to the devices network.
 
+### **!!!!DISCLAIMER!!!!: This project has halted development due to the Paid Apple Developer account requirement for the Wake-On-Lan feature.**
+
 <img width="426" height="862" alt="Screenshot 2025-09-25 at 01 40 50" src="https://github.com/user-attachments/assets/3d97758c-7675-4e22-ae58-183aaea8380c" />
 
 ## About The Project
@@ -22,13 +24,14 @@ Built entirely with SwiftUI, the app is designed to be fast and easy to use whil
 
 ## Features
 
-### Current-ish Features
-* **Device Management:** Easily add, edit (kinda), and delete computers from your list.
-* **Detailed Information:** Store essential details for each machine, including a nickname, MAC address, and (soon) custom notes.
+### Current Features
+* **Device Management:** Easily add, edit, and delete computers from your list.
+* **Detailed Information:** Store essential details for each machine, including a nickname, MAC address, and more.
 * **Local Persistence:** Your device list is securely saved on your device.
 
 ### Upcoming Features
-*  **Wake-On-LAN (WOL):** Power on your computers remotely from anywhere with an internet connection (may require a remote VPN and separate host machine).
+If I resume development, these are what would be added:
+*  **Wake-On-LAN (WOL):** ***NOTE: Requires Paid Apple Developer account that I do not have...*** Power on your computers remotely from anywhere with an internet connection (may require a remote VPN and separate host machine).
 *  **Remote Sensor Reading:** Monitor hardware stats like CPU temperature, fan speeds, and memory usage (will require a companion agent on the host machine).
 *  **Live Status Pinging:** See at a glance which machines on your network are online or offline.
 *  **Notifications:** Recieve notifications regarding your machines such as new power status, high temperatures, and more.
@@ -36,7 +39,7 @@ Built entirely with SwiftUI, the app is designed to be fast and easy to use whil
 
 ## Getting Started
 
-To get a local copy up and running, build this repository in Xcode 26.0 or greater.
+To get a local copy up and running, build this repository in Xcode 26.0.1 or greater.
 
 ### Prerequisites
 
@@ -57,13 +60,13 @@ To get a local copy up and running, build this repository in Xcode 26.0 or great
 
 1.  Launch the app on your iPhone.
 2.  Tap the `+` button at the bottom to add a new computer.
-3.  Fill in the details for your machine, such as the name and MAC address.
+3.  Fill in the name of the machine
 4.  Tap "Save".
-5.  Your machine will now appear in the main list. Tap on it to view its details. Editing details coming soon.
+5.  Your machine will now appear in the main list. Tap on it to view its details. You can then add components.
 
 ## Roadmap
 
-See the [open issues](https://github.com/rngkGit/WOLMonitoring/issues) for a full list of proposed features (and known issues).
+Project has halted development. Listed below were features that would be added if I purchased a Paid Apple Developer account.
 
 - [X] **Core:** Add, Edit, and Delete Computer Profiles
 - [ ] **Feature:** Implement Wake-On-LAN (WOL) Packet Sending
